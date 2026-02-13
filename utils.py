@@ -287,6 +287,7 @@ def calculate_gap_analysis(target_tables, achieved_tables,
         row_mapping: Dict {Target Table Name: {Target Row Label: Achieved Row Label}}
     """
     all_results = []
+    full_row_mapping = {} # {Table: {TargetRow: DashboardRow}}
     if row_mapping is None:
         row_mapping = {}
     
@@ -338,6 +339,21 @@ def calculate_gap_analysis(target_tables, achieved_tables,
         
         # Add metadata
         merged['Table Pair'] = f"{t_name} vs {a_name}"
+        
+        # Capture full mapping trace (Exact + Mapped)
+        table_trace = {}
+        for _, row in merged.iterrows():
+            kt = row.get(key_col_t)
+            ka = row.get(key_col_a)
+            if pd.notna(kt) and pd.notna(ka):
+                # Match found. Original dash name?
+                orig = kt 
+                if t_name in row_mapping and kt in row_mapping[t_name]:
+                    orig = row_mapping[t_name][kt]
+                table_trace[str(kt)] = str(orig)
+        
+        if table_trace:
+            full_row_mapping[t_name] = table_trace
         
         # Calculations
         cols_to_keep = ['Table Pair', 'Row Label']
@@ -394,7 +410,7 @@ def calculate_gap_analysis(target_tables, achieved_tables,
         if len(cols_to_keep) > 2: # Only if we actually found columns
             all_results.append(merged[cols_to_keep].copy())
         
-    return all_results
+    return all_results, full_row_mapping
 
 def generate_gap_report(df_results, target_tables, achieved_tables, table_mapping, column_mapping, row_mapping=None):
     """

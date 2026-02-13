@@ -351,8 +351,8 @@ if target_tables and achieved_tables:
                             st.error("Please map at least one column.")
                         else:
                             try:
-                                results = calculate_gap_analysis(target_tables, achieved_tables, 
-                                                               table_mapping, col_mapping, row_mapping)
+                                results, full_row_mapping = calculate_gap_analysis(target_tables, achieved_tables, 
+                                                                                  table_mapping, col_mapping, row_mapping)
                                 
                                 st.success("Calculation Complete!")
                                 
@@ -362,8 +362,9 @@ if target_tables and achieved_tables:
                                     st.dataframe(res_df.head(), use_container_width=True)
                                     
                                 # Download
+                                # Pass the full TRACE for the report, while keeping 'row_mapping' for the job config
                                 report_bytes = generate_gap_report(results, target_tables, achieved_tables, 
-                                                                 table_mapping, col_mapping, row_mapping)
+                                                                 table_mapping, col_mapping, full_row_mapping)
                                 st.download_button("Download Report", report_bytes, "gap_report.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
                                 
                             except Exception as e:
