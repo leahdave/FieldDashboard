@@ -2,7 +2,14 @@ import streamlit as st
 import pandas as pd
 from utils import load_data, get_fuzzy_suggestions, get_smart_unique_matches, calculate_gap_analysis, generate_gap_report
 from storage import save_job, load_job, list_jobs
-from api_connector import fetch_decipher_data, fetch_forsta_dashboard_data, parse_forsta_url
+try:
+    from api_connector import fetch_decipher_data, fetch_forsta_dashboard_data, parse_forsta_url
+except ImportError as e:
+    st.error(f"Critical Error: Could not import API Connector. {e}")
+    # Fallback to prevent crash but show message
+    fetch_decipher_data = None
+    fetch_forsta_dashboard_data = None
+    parse_forsta_url = None
 
 st.set_page_config(page_title="Multi-Table Gap Analysis", layout="wide")
 
