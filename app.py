@@ -229,7 +229,7 @@ if target_tables and achieved_tables:
 
                     # Default selection
                     if not saved_val and match_info:
-                        match_val, score = match_info
+                        match_val, score, alts = match_info
                         try:
                             idx = opts.index(match_val)
                         except: 
@@ -296,7 +296,7 @@ if target_tables and achieved_tables:
                                 saved_val = st.session_state.get(f"row_{t_table}_{uk}")
                                 
                                 if not saved_val and match_info:
-                                    match_val, score = match_info
+                                    match_val, score, alts = match_info
                                     try:
                                         idx = opts.index(match_val)
                                     except:
