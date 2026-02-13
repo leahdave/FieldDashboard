@@ -453,14 +453,25 @@ def generate_gap_report(df_results, target_tables, achieved_tables, table_mappin
             
             # Columns: Row Label + Remaining
             cols_rem = [c for c in df.columns if "(Remaining)" in c]
-            cols_summary = ['Row Label'] + cols_rem
-            clean_headers = ['Row Label'] + [c.replace(" (Remaining)", "") for c in cols_rem]
+            
+            # Detect if this table has T&B rows
+            # We look at any (Target) column in this df
+            t_cols = [c for c in df.columns if "(Target)" in c]
+            is_tb_table = False
+            for tc in t_cols:
+                if "T&B" in df[tc].astype(str).values:
+                    is_tb_table = True
+                    break
+            
+            header_text = "track & balance - currently achieved values" if is_tb_table else ""
+            clean_headers = [header_text] + [c.replace(" (Remaining)", "") for c in cols_rem]
             
             # Write Headers
             for i, h in enumerate(clean_headers):
                 ws_sum.write(sum_row, i, h, header_fmt)
                 ws_sum.set_column(i, i, 20)
             sum_row += 1
+
             
             # Write Data - Use enumeration (r_pos) for Excel positioning
             for r_pos, (idx, row) in enumerate(df.iterrows()):
