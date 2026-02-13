@@ -14,6 +14,7 @@ st.caption("Matches tables by header name, then rows by first column.")
 with st.sidebar:
     st.header("Job Management")
     st.info("Save your mappings to reload them later.")
+    st.warning("⚠️ Note: Streamlit Cloud resets every 24h. For permanent storage, contact admin to connect a database.")
     
     # 1. Select or Create Job ID
     existing_jobs = list_jobs()
@@ -35,28 +36,29 @@ with st.sidebar:
             if err:
                 st.error(err)
             else:
-                # Restore State
-                # We need to populate st.session_state keys matching our widgets
-                
-                # 1. Table Mappings: key = f"tbl_{t_name}"
-                for t_name, val in data.get('table_mapping', {}).items():
-                    st.session_state[f"tbl_{t_name}"] = val
+                try:
+                    # Restore State
+                    # 1. Table Mappings: key = f"tbl_{t_name}"
+                    for t_name, val in data.get('table_mapping', {}).items():
+                        st.session_state[f"tbl_{t_name}"] = val
+                        
+                    # 2. Col Mappings: key = f"col_{col}"
+                    for col, val in data.get('col_mapping', {}).items():
+                        st.session_state[f"col_{col}"] = val
+                        
+                    # 3. Row Mappings: key = f"row_{t_table}_{uk}"
+                    for t_table, row_map in data.get('row_mapping', {}).items():
+                        for uk, val in row_map.items():
+                            st.session_state[f"row_{t_table}_{uk}"] = val
                     
-                # 2. Col Mappings: key = f"col_{col}"
-                for col, val in data.get('col_mapping', {}).items():
-                    st.session_state[f"col_{col}"] = val
+                    st.session_state['current_job_id'] = job_id
+                    st.success(f"Successfully loaded '{job_id}' configuration details into memory.")
+                    st.toast(f"Loaded '{job_id}'!", icon="✅")
                     
-                # 3. Row Mappings: key = f"row_{t_table}_{uk}"
-                # stored as { table: { row_key: val } }
-                for t_table, row_map in data.get('row_mapping', {}).items():
-                    for uk, val in row_map.items():
-                        st.session_state[f"row_{t_table}_{uk}"] = val
-                
-                st.toast(f"Loaded configuration for '{job_id}'!", icon="✅")
-                st.session_state['current_job_id'] = job_id
-                
-                # Force refresh to populate widgets
-                st.rerun()
+                    # Force refresh to populate widgets
+                    st.rerun()
+                except Exception as ex:
+                    st.error(f"Error applying configuration: {ex}")
 
 
 # -- STEP 1: LOAD FILES --
