@@ -320,14 +320,13 @@ def calculate_gap_analysis(target_tables, achieved_tables,
         merged = pd.merge(df_t, df_a, left_on=key_col_t, right_on=key_col_a, how='outer', suffixes=('_T', '_A'))
         
         # Sort back to Target order. New rows from Dashboard (not in Target) will go to the end.
-        merged = merged.sort_values(by='_target_order').drop(columns=['_target_order'])
+        merged = merged.sort_values(by='_target_order').drop(columns=['_target_order']).reset_index(drop=True)
         
         # Row Label
         merged['Row Label'] = merged[key_col_t].combine_first(merged[key_col_a])
         
         # Add metadata
         merged['Table Pair'] = f"{t_name} vs {a_name}"
-
         
         # Calculations
         cols_to_keep = ['Table Pair', 'Row Label']
@@ -346,30 +345,19 @@ def calculate_gap_analysis(target_tables, achieved_tables,
                  real_a = f"{a_col}_A"
                  
             # Extract data
-            # Check raw target value first for "T&B"
-            raw_t = merged.get(real_t, 0)
-            
-            # Vectorized approach or row-by-row? 
-            # Since we are iterating columns, we can operate on the Series.
-            
-            # Create a Series for results
             remaining_series = []
             target_series = []
             
-            # Iterate rows for this column to handle mixed types (strings vs numbers) safely
+            # Iterate rows
             for idx, row in merged.iterrows():
                 r_t = row.get(real_t, 0)
                 # Check for T&B
                 if str(r_t).strip().upper() in ["T&B", "TB", "TRACK & BALANCE"]:
-                    # Keep T&B Logic:
-                    # Target = "T&B"
-                    # Remaining = The Achieved Value (to show what is currently there)
-                    # We will format this later in Excel generation.
                     val_t = "T&B"
                     val_a = pd.to_numeric(row.get(real_a, 0), errors='coerce')
                     if pd.isna(val_a): val_a = 0
                     
-                    remaining = val_a # Show current status
+                    remaining = val_a 
                 else:
                     # Numeric calc
                     val_t = pd.to_numeric(r_t, errors='coerce')
@@ -418,53 +406,40 @@ def generate_gap_report(df_results, target_tables, achieved_tables, table_mappin
         
         header_fmt = workbook.add_format({'bold': True, 'bg_color': '#D3D3D3', 'border': 1})
         neg_fmt = workbook.add_format({'font_color': '#9C0006', 'bg_color': '#FFC7CE'})
+        tb_fmt = workbook.add_format({'italic': True, 'font_color': '#808080'})
         
         start_row = 0
         for df in df_results:
             df.to_excel(writer, sheet_name=sheet_name, startrow=start_row, index=False)
             
-            # Formatting
+            # Header formatting
             for col_num, value in enumerate(df.columns.values):
                 worksheet.write(start_row, col_num, value, header_fmt)
                 worksheet.set_column(col_num, col_num, 20)
                 
-                # Gap Analysis Tab specific formatting logic is complex due to mixed numeric/string ("T&B")
-                # But simple conditional formatting works for numerics.
+                # Conditional formatting for Remaining negatives
                 if "(Remaining)" in str(value):
                      worksheet.conditional_format(start_row+1, col_num, start_row+len(df), col_num, {
                         'type': 'cell', 'criteria': '<', 'value': 0, 'format': neg_fmt
                      })
 
-            # Check for T&B rows to apply Light Grey Italic in Gap Analysis Tab
-            # We need to iterate rows to find "T&B" in Target columns
-            # This is hard with xlsxwriter conditional_format without a helper column or cell-by-cell write.
-            # cell-by-cell write is safer.
-            # Let's rewrite the data writing loop for Gap Analysis to handle styling per cell?
-            # Or use conditional format formula? =ISNUMBER(SEARCH("T&B", ...))
-            # Simpler: Iterating rows is fine for small datasets.
-            
-            tb_fmt = workbook.add_format({'italic': True, 'font_color': '#808080'})
-            
-            # Find relevant columns
+            # Check for T&B rows for styling
             t_cols = [c for c in df.columns if "(Target)" in c]
-            for r_idx, row in df.iterrows():
+            for r_pos, (idx, row) in enumerate(df.iterrows()):
                 for t_col in t_cols:
                     if str(row[t_col]) == "T&B":
-                        # Apply format to Target, Achieved, Remaining in this row?
-                        # User wants: "Remaining" to show light grey italic.
                         base_col = t_col.replace(" (Target)", "")
                         rem_col_name = f"{base_col} (Remaining)"
                         
                         if rem_col_name in df.columns:
                             c_idx = df.columns.get_loc(rem_col_name)
-                            # Write the value again with format
-                            # Row offset: start_row + 1 (header) + r_idx
+                            # Write formatted value to correct Excel row using r_pos
                             val_to_write = row[rem_col_name]
-                            worksheet.write(start_row + 1 + r_idx, c_idx, val_to_write, tb_fmt)
+                            worksheet.write(start_row + 1 + r_pos, c_idx, val_to_write, tb_fmt)
 
             start_row += len(df) + 3
 
-        # --- 2. Gap Summary (New Tab) ---
+        # --- 2. Gap Summary ---
         sheet_name_sum = 'Gap Summary'
         workbook.add_worksheet(sheet_name_sum)
         ws_sum = writer.sheets[sheet_name_sum]
@@ -476,15 +451,9 @@ def generate_gap_report(df_results, target_tables, achieved_tables, table_mappin
             ws_sum.merge_range(sum_row, 0, sum_row, 1, pair_name, header_fmt)
             sum_row += 1
             
-            # Columns to keep: Row Label + Remaining Columns
+            # Columns: Row Label + Remaining
             cols_rem = [c for c in df.columns if "(Remaining)" in c]
             cols_summary = ['Row Label'] + cols_rem
-            
-            df_slice = df[cols_summary].copy()
-            
-            # Rename columns to remove "(Remaining)" for cleaner look? Or keep it?
-            # "JUST the remaining values" -> Header likely should say "Remaining" or just the Col Name.
-            # Let's clean the headers: "Sales (Remaining)" -> "Sales"
             clean_headers = ['Row Label'] + [c.replace(" (Remaining)", "") for c in cols_rem]
             
             # Write Headers
@@ -493,15 +462,14 @@ def generate_gap_report(df_results, target_tables, achieved_tables, table_mappin
                 ws_sum.set_column(i, i, 20)
             sum_row += 1
             
-            # Write Data & Format
-            for r_idx, row in df.iterrows():
-                ws_sum.write(sum_row + r_idx, 0, row['Row Label'])
+            # Write Data - Use enumeration (r_pos) for Excel positioning
+            for r_pos, (idx, row) in enumerate(df.iterrows()):
+                ws_sum.write(sum_row + r_pos, 0, row['Row Label'])
                 
-                # Check original df for T&B status
                 for c_idx, col_name in enumerate(cols_rem):
                     val = row[col_name]
                     target_col_name = col_name.replace("(Remaining)", "(Target)")
-                    is_tb = str(df.iloc[r_idx][target_col_name]) == "T&B"
+                    is_tb = str(row[target_col_name]) == "T&B"
                     
                     cell_fmt = None
                     if is_tb:
@@ -509,9 +477,10 @@ def generate_gap_report(df_results, target_tables, achieved_tables, table_mappin
                     elif isinstance(val, (int, float)) and val < 0:
                         cell_fmt = neg_fmt
                         
-                    ws_sum.write(sum_row + r_idx, c_idx + 1, val, cell_fmt)
+                    ws_sum.write(sum_row + r_pos, c_idx + 1, val, cell_fmt)
             
             sum_row += len(df) + 2
+
             
             
         # --- 3. Mapping Keys ---
