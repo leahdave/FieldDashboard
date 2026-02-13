@@ -54,6 +54,9 @@ with st.sidebar:
                 
                 st.toast(f"Loaded configuration for '{job_id}'!", icon="✅")
                 st.session_state['current_job_id'] = job_id
+                
+                # Force refresh to populate widgets
+                st.rerun()
 
 
 # -- STEP 1: LOAD FILES --
@@ -236,9 +239,15 @@ if target_tables and achieved_tables:
                     if sel != "(Skip)":
                         col_mapping[col] = sel
                 with c3:
-                    # Show score if current selection matches the smart suggestion
+                    # Show score and alternative if current selection matches the smart suggestion
                     if match_info and sel == match_info[0]:
-                        st.caption(f"Match {match_info[1]}%")
+                        score = match_info[1]
+                        alts = match_info[2]
+                        st.caption(f"Match {score}%")
+                        if alts:
+                            st.caption(f":grey[Next best: {alts[0][0]} ({alts[0][1]}%)]")
+                    elif match_info:
+                        pass
 
             if col_mapping:
                 st.divider()
@@ -300,8 +309,10 @@ if target_tables and achieved_tables:
                                     used_a_keys.append(sel_row)
                                     
                                 # Optional: Show score if using default
-                                if idx > 0 and sel_row == match_info[0]:
+                                if idx > 0 and match_info and sel_row == match_info[0]:
                                     c2.caption(f"Best unique match: {match_info[1]}%")
+                                    if match_info[2]:
+                                        c2.caption(f":grey[Next best: {match_info[2][0][0]} ({match_info[2][0][1]}%)]")
                                     
                             if table_row_map:
                                 row_mapping[t_table] = table_row_map
@@ -318,8 +329,8 @@ if target_tables and achieved_tables:
                 with ac1:
                     # Save Job Logic
                     if st.button("💾 Save Job Config"):
-                        if not job_id:
-                            st.error("Job ID required to save.")
+                        if not job_id or job_id == "No jobs found":
+                            st.error("Please enter a valid Job ID in the sidebar to save.")
                         else:
                             job_data = {
                                 "table_mapping": table_mapping,
@@ -351,7 +362,8 @@ if target_tables and achieved_tables:
                                     st.dataframe(res_df.head(), use_container_width=True)
                                     
                                 # Download
-                                report_bytes = generate_gap_report(results, target_tables, achieved_tables, table_mapping, col_mapping)
+                                report_bytes = generate_gap_report(results, target_tables, achieved_tables, 
+                                                                 table_mapping, col_mapping, row_mapping)
                                 st.download_button("Download Report", report_bytes, "gap_report.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
                                 
                             except Exception as e:

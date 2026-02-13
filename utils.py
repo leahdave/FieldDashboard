@@ -251,17 +251,28 @@ def get_smart_unique_matches(target_items, candidate_items, threshold=60):
     all_matches.sort(key=lambda x: x[0], reverse=True)
     
     # 3. Greedy assignment
-    assignments = {} # target -> (candidate, score)
+    assignments = {} # target -> (candidate, score, alternatives)
     used_candidates = set()
     assigned_targets = set()
     
+    # Store all scores per target for the UI to show alternatives
+    scores_per_target = {}
+    for score, t, c in all_matches:
+        if t not in scores_per_target:
+            scores_per_target[t] = []
+        scores_per_target[t].append((c, score))
+
     for score, t, c in all_matches:
         if t not in assigned_targets and c not in used_candidates:
-            assignments[t] = (c, score)
+            # Found best unique match
+            # Get alternatives (remaining candidates for this target)
+            alts = [x for x in scores_per_target.get(t, []) if x[0] != c and x[0] not in used_candidates]
+            assignments[t] = (c, score, alts)
             assigned_targets.add(t)
             used_candidates.add(c)
             
     return assignments
+
 
 def calculate_gap_analysis(target_tables, achieved_tables, 
                            table_mapping, column_mapping, row_mapping=None):
@@ -385,7 +396,7 @@ def calculate_gap_analysis(target_tables, achieved_tables,
         
     return all_results
 
-def generate_gap_report(df_results, target_tables, achieved_tables, table_mapping, column_mapping):
+def generate_gap_report(df_results, target_tables, achieved_tables, table_mapping, column_mapping, row_mapping=None):
     """
     Generate styled Excel report with multiple tabs:
     1. Gap Analysis ( Consolidated Results )
@@ -393,6 +404,9 @@ def generate_gap_report(df_results, target_tables, achieved_tables, table_mappin
     3. Source - Target ( Raw Data )
     4. Source - Dashboard ( Raw Data )
     """
+    if row_mapping is None:
+        row_mapping = {}
+        
     from io import BytesIO
     output = BytesIO()
     
@@ -510,6 +524,22 @@ def generate_gap_report(df_results, target_tables, achieved_tables, table_mappin
         mk_sheet.write(0, 5, 'Dashboard Column', header_fmt)
         mk_sheet.set_column(0, 1, 25)
         mk_sheet.set_column(4, 5, 25)
+
+        # New: Row Mappings (Matched Rows)
+        row_mk_start = 0
+        mk_sheet.write(0, 8, 'Matched Rows (Target -> Dashboard)', header_fmt)
+        mk_sheet.set_column(8, 9, 30)
+        row_mk_row = 1
+        
+        for t_table, r_map in row_mapping.items():
+            if r_map:
+                mk_sheet.write(row_mk_row, 8, f"Table: {t_table}", workbook.add_format({'bold': True, 'italic': True}))
+                row_mk_row += 1
+                for t_row, a_row in r_map.items():
+                    mk_sheet.write(row_mk_row, 8, t_row)
+                    mk_sheet.write(row_mk_row, 9, a_row)
+                    row_mk_row += 1
+                row_mk_row += 1 # Spacer
 
         # --- 3. Source - Target ---
         st_row = 0
