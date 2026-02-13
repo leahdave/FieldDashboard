@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 from utils import load_data, get_fuzzy_suggestions, get_smart_unique_matches, calculate_gap_analysis, generate_gap_report
 from storage import save_job, load_job, list_jobs
-from api_connector import fetch_decipher_data
+from api_connector import fetch_decipher_data, fetch_forsta_dashboard_data, parse_forsta_url
 
 st.set_page_config(page_title="Multi-Table Gap Analysis", layout="wide")
 
@@ -105,25 +105,49 @@ with col2:
                 st.error(f"Error: {e}")
                 
     else: # Forsta API
-        st.caption("Connect to Decipher/Forsta Survey Data")
+        st.caption("Connect to Decipher/Forsta Survey Data or specific Dashboards")
         
+        # New: URL Paster for Auto-Parsing
+        url_input = st.text_input("Paste Forsta link to auto-fill (optional)", placeholder="https://emea.focusvision.com/apps/dashboard/...")
+        
+        parsed = {}
+        if url_input:
+            parsed = parse_forsta_url(url_input)
+            if parsed:
+                st.toast("URL parsed! Fields updated below.", icon="🤖")
+
         # Inputs
-        # Default Server
-        api_server = st.text_input("Server", value="emea.focusvision.com")
-        # Default Project Path logic: try to parse from input if they paste a whole link? 
-        # For now just simple text input
-        api_project = st.text_input("Project Path", placeholder="selfserve/2e95/ge320")
+        c1, c2 = st.columns(2)
+        with c1:
+            api_server = st.text_input("Server", value=parsed.get("server", "emea.focusvision.com"))
+        with c2:
+            api_mode = st.radio("API Mode", ["Project Data", "Specific Dashboard"], horizontal=True)
+
+        c3, c4 = st.columns(2)
+        with c3:
+            api_project = st.text_input("Project Path", value=parsed.get("project_path", ""), placeholder="selfserve/2e95/ge320")
+        with c4:
+            if api_mode == "Specific Dashboard":
+                api_dash_id = st.text_input("Dashboard ID", value=parsed.get("dashboard_id", ""), placeholder="p42hq2c2ex5u")
+            else:
+                api_dash_id = None
+                
         api_key = st.text_input("API Key", type="password")
         
         if st.button("Fetch Data"):
             if not api_key or not api_project:
                 st.error("Please provide API Key and Project Path.")
+            elif api_mode == "Specific Dashboard" and not api_dash_id:
+                st.error("Please provide a Dashboard ID for this mode.")
             else:
                 with st.spinner("Connecting to Forsta..."):
-                    file_obj, err = fetch_decipher_data(api_key, api_server, api_project)
+                    if api_mode == "Specific Dashboard":
+                        file_obj, err = fetch_forsta_dashboard_data(api_key, api_server, api_project, api_dash_id)
+                    else:
+                        file_obj, err = fetch_decipher_data(api_key, api_server, api_project)
                     
                     if err:
-                        st.error(err)
+                        st.error(f"API Error: {err}")
                     else:
                         try:
                             # Load data from the returned file object
