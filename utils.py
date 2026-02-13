@@ -313,14 +313,21 @@ def calculate_gap_analysis(target_tables, achieved_tables,
             # Apply replacement to Key Column
             df_a[key_col_a] = df_a[key_col_a].replace(replace_dict)
         
-        # Merge
+        # Merge - Preserve Target Order
+        # Add a temporary index to Target to restore its order after outer merge
+        df_t['_target_order'] = range(len(df_t))
+        
         merged = pd.merge(df_t, df_a, left_on=key_col_t, right_on=key_col_a, how='outer', suffixes=('_T', '_A'))
+        
+        # Sort back to Target order. New rows from Dashboard (not in Target) will go to the end.
+        merged = merged.sort_values(by='_target_order').drop(columns=['_target_order'])
         
         # Row Label
         merged['Row Label'] = merged[key_col_t].combine_first(merged[key_col_a])
         
         # Add metadata
         merged['Table Pair'] = f"{t_name} vs {a_name}"
+
         
         # Calculations
         cols_to_keep = ['Table Pair', 'Row Label']
