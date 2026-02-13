@@ -15,9 +15,11 @@ def load_data(file, parse_mode='standard'):
     """
     try:
         raw_df = None
-        if file.name.endswith('.csv'):
+        # Handle cases where file is BytesIO (from API) and has no .name
+        filename = getattr(file, 'name', 'api_result.xlsx').lower()
+
+        if filename.endswith('.csv'):
             encodings = ['utf-8', 'cp1252', 'latin1']
-            # Use a large number of columns to handle ragged files (Table Name vs Data)
             col_names = range(100)
             for encoding in encodings:
                 try:
@@ -34,11 +36,20 @@ def load_data(file, parse_mode='standard'):
                 file.seek(0)
                 raw_df = pd.read_excel(file, header=None)
              except:
-                file.seek(0)
-                raw_df = pd.read_excel(file, engine='calamine', header=None)
+                try:
+                    file.seek(0)
+                    raw_df = pd.read_excel(file, engine='calamine', header=None)
+                except Exception as ex:
+                    # If Excel fails, maybe it IS a CSV after all? (Fallback)
+                    try:
+                        file.seek(0)
+                        raw_df = pd.read_csv(file, header=None, names=range(100), on_bad_lines='skip')
+                    except:
+                        raise ex
     
     except Exception as e:
         raise ValueError(f"Could not read file: {e}")
+
 
     if raw_df is None or raw_df.empty:
         return {}
