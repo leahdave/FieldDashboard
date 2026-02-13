@@ -139,8 +139,13 @@ with col2:
             else:
                 api_dash_id = None
                 
-        api_key = st.text_input("API Key", type="password")
+        api_key = st.text_input("API Key", type="password", help="Forsta API keys are exactly 64 characters long (32 public + 32 private).")
         
+        if api_key and len(api_key.strip()) == 32:
+            st.warning("⚠️ This looks like only a **32-character** Public Key. Forsta API requires the full **64-character** key (Public + Private combined). Please generate a new key in your portal if you don't have the private half.")
+        elif api_key and len(api_key.strip()) != 64:
+             st.caption(f":grey[Current length: {len(api_key.strip())} characters (64 required)]")
+
         if st.button("Fetch Data"):
             if not api_key or not api_project:
                 st.error("Please provide API Key and Project Path.")
