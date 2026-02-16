@@ -5,3 +5,4 @@ xlsxwriter
 python-calamine
 thefuzz
 requests
+st-gsheets-connection

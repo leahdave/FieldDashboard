@@ -3,6 +3,10 @@ import pandas as pd
 from utils import load_data, get_fuzzy_suggestions, get_smart_unique_matches, calculate_gap_analysis, generate_gap_report
 from storage import save_job, load_job, list_jobs
 try:
+    from streamlit_gsheets import GSheetsConnection
+except ImportError:
+    GSheetsConnection = None
+try:
     from api_connector import fetch_decipher_data, fetch_forsta_dashboard_data, parse_forsta_url
 except ImportError as e:
     st.error(f"Critical Error: Could not import API Connector. {e}")
@@ -17,6 +21,16 @@ st.title("Gap Analysis & Comparison Tool")
 st.markdown("Compare **Target (Goal)** vs **Dashboard (Achieved)** files with multiple tables.")
 st.caption("Matches tables by header name, then rows by first column.")
 
+# Initialize Google Sheets Connection if available
+gsheets_conn = None
+if GSheetsConnection:
+    try:
+        # This will look for [connections.gsheets] in secrets.toml
+        gsheets_conn = st.connection("gsheets", type=GSheetsConnection)
+    except Exception as e:
+        # Silently fail for now, storage.py handles None gsheets_conn
+        pass
+
 # -- SIDEBAR: JOB MANAGEMENT --
 with st.sidebar:
     st.header("Job Management")
@@ -24,11 +38,11 @@ with st.sidebar:
     st.warning("⚠️ Note: Streamlit Cloud resets every 24h. For permanent storage, contact admin to connect a database.")
     
     # 1. Select or Create Job ID
-    existing_jobs = list_jobs()
+    existing_job_list = list_jobs(gsheets_conn)
     job_mode = st.radio("Mode", ["New Job", "Load Job"], horizontal=True)
     
     if job_mode == "Load Job":
-        job_id = st.selectbox("Select Job ID", existing_jobs if existing_jobs else ["No jobs found"])
+        job_id = st.selectbox("Select Job ID", existing_job_list if existing_job_list else ["No jobs found"])
     else:
         job_id = st.text_input("Enter Job ID (e.g. PROJECT-123)")
     
@@ -39,7 +53,7 @@ with st.sidebar:
         elif not job_id:
             st.error("Please enter a Job ID.")
         else:
-            data, err = load_job(job_id)
+            data, err = load_job(job_id, gsheets_conn)
             if err:
                 st.error(err)
             else:
@@ -377,20 +391,21 @@ if target_tables and achieved_tables:
                 
                 with ac1:
                     # Save Job Logic
-                    if st.button("💾 Save Job Config"):
-                        if not job_id or job_id == "No jobs found":
-                            st.error("Please enter a valid Job ID in the sidebar to save.")
+                    save_id = st.text_input("New Job ID", key="save_id_input")
+                    if st.button("Save Current Configuration"):
+                        if not save_id:
+                            st.sidebar.error("Please enter a Job ID.")
                         else:
-                            job_data = {
-                                "table_mapping": table_mapping,
-                                "col_mapping": col_mapping,
-                                "row_mapping": row_mapping
+                            current_config = {
+                                "table_mapping": {k: st.session_state.get(f"tbl_{k}", v) for k, v in table_mapping.items()},
+                                "col_mapping": {k: st.session_state.get(f"col_{k}", v) for k, v in col_mapping.items()},
+                                "row_mapping": {t_name: {uk: st.session_state.get(f"row_{t_name}_{uk}", v) for uk, v in row_map.items()} for t_name, row_map in row_mapping.items()},
                             }
                             # Call external storage function
-                            success, msg = save_job(job_id, job_data)
+                            success, msg = save_job(save_id, current_config, gsheets_conn)
                             if success:
                                 st.toast(msg, icon="✅")
-                                st.success(f"Saved to '{job_id}'")
+                                st.success(f"Saved to '{save_id}'")
                             else:
                                 st.error(msg)
                 
