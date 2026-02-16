@@ -126,16 +126,27 @@ with col2:
         # Inputs
         c1, c2 = st.columns(2)
         with c1:
-            api_server = st.text_input("Server", value=parsed.get("server", "emea.focusvision.com"))
+            api_server = st.text_input("Server", 
+                                     value=parsed.get("server", "emea.focusvision.com"), 
+                                     placeholder="emea.focusvision.com",
+                                     help="The hostname only, e.g. emea.focusvision.com. Do NOT include /api or paths here.")
+            if "/" in api_server:
+                st.error("Server should not contain slashes. If you pasted a full link, use the 'Auto-fill' box above.")
         with c2:
             api_mode = st.radio("API Mode", ["Project Data", "Specific Dashboard"], horizontal=True)
 
         c3, c4 = st.columns(2)
         with c3:
-            api_project = st.text_input("Project Path", value=parsed.get("project_path", ""), placeholder="selfserve/2e95/ge320")
+            api_project = st.text_input("Project Path", 
+                                      value=parsed.get("project_path", ""), 
+                                      placeholder="selfserve/2e95/ge320",
+                                      help="Format: selfserve/XXXX/YYYY")
         with c4:
             if api_mode == "Specific Dashboard":
-                api_dash_id = st.text_input("Dashboard ID", value=parsed.get("dashboard_id", ""), placeholder="p42hq2c2ex5u")
+                api_dash_id = st.text_input("Dashboard ID", 
+                                          value=parsed.get("dashboard_id", ""), 
+                                          placeholder="p42hq2c2ex5u",
+                                          help="The unique ID of the specific dashboard view.")
             else:
                 api_dash_id = None
                 

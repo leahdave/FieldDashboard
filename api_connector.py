@@ -10,28 +10,37 @@ def parse_forsta_url(url):
     if not url:
         return {}
     
+    url = url.strip()
     server = ""
     project_path = ""
     dashboard_id = ""
     
-    # Extract Server
+    # 1. Extract Server
     if "://" in url:
         server = url.split("://")[1].split("/")[0]
     else:
         server = url.split("/")[0]
         
-    # Extract Project Path and Dashboard ID
-    # Pattern: .../selfserve/XX/YY:view/ZZ
+    # 2. Extract Project Path and Dashboard ID
     if "/selfserve/" in url:
+        # Standard Dashboard/Report Hub URL
         part = url.split("/selfserve/")[1]
-        # part is e.g. "2e95/ge320:view/p42hq2c2ex5u"
+        # part is e.g. "2e95/ge320:view/p42hq2c2ex5u" or "2e95/ge320/..."
+        
         if ":view/" in part:
-            project_path_part, dashboard_id = part.split(":view/")
+            project_path_part, dash_part = part.split(":view/")
             project_path = "selfserve/" + project_path_part.strip("/")
-        elif "/" in part:
-            # Fallback or standard project path
-            project_path = "selfserve/" + part.split("/")[0] + "/" + part.split("/")[1].split(":")[0]
-            
+            dashboard_id = dash_part.split("/")[0] # Get first part before any queries
+        else:
+            # Fallback parsing
+            segments = part.split("/")
+            if len(segments) >= 2:
+                # project_path is selfserve/2e95/ge320
+                project_path = "selfserve/" + segments[0] + "/" + segments[1].split(":")[0]
+                if len(segments) >= 3:
+                     # Attempt to find if dashboard_id is buried in path
+                     dashboard_id = segments[-1].split("?")[0]
+    
     return {
         "server": server,
         "project_path": project_path,
